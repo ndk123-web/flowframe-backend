@@ -4,6 +4,10 @@ mod models;
 mod shared;
 mod state;
 mod config;
+mod repositories;
+mod services;
+mod handlers;
+mod dtos;
 
 #[tokio::main]
 async fn main() {
