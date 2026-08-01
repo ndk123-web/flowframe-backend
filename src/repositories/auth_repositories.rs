@@ -1,18 +1,30 @@
-use sqlx::SqlitePool;
-
 use crate::models::user_model::User;
+use anyhow::Result;
+use bson::doc;
+use mongodb::{Collection, Database};
 
-#[allow(dead_code)]
-pub async fn signup_repo(pool: &SqlitePool, data: User) -> anyhow::Result<User> {
-    let user = User {
-        id: 1,
-        email: String::from("ndk@gmail.com"),
-        password_hash: String::from("pass"),
-        type_of_signin: String::from("google"),
-    };
+#[derive(Clone)]
+pub struct AuthRepository {
+    user_collection: Collection<User>,
+}
 
-    println!("{:#?}", pool);
-    println!("{:#?}", data);
+impl AuthRepository {
+    pub fn new(db: &Database) -> Self {
+        let user_collection = db.collection::<User>("users");
+        Self { user_collection }
+    }
 
-    return anyhow::Ok(user);
+    pub async fn find_by_email(&self, email: &str) -> Result<Option<User>> {
+        let filter = doc! { "email": email };
+        let user = self.user_collection.find_one(filter).await?;
+        Ok(user)
+    }
+
+    pub async fn create_user(&self, mut user: User) -> Result<User> {
+        let insert_result = self.user_collection.insert_one(&user).await?;
+        if let Some(inserted_id) = insert_result.inserted_id.as_object_id() {
+            user.id = Some(inserted_id);
+        }
+        Ok(user)
+    }
 }
