@@ -6,6 +6,7 @@ use crate::repositories::auth_repositories::AuthRepository;
 use crate::utils::jwt::generate_jwt;
 use crate::utils::password_hash::{hash_password, verify_password};
 use anyhow::{anyhow, Result};
+use bson::DateTime;
 
 #[derive(Clone)]
 pub struct AuthService {
@@ -25,12 +26,18 @@ impl AuthService {
 
         let password_hash = hash_password(&req.password)?;
         let type_of_signin = req.type_of_signin.unwrap_or_else(|| "email".to_string());
+        let now = DateTime::now();
 
         let new_user = User {
             id: None,
+            firebase_uid: None,
             email: req.email.clone(),
-            password_hash,
+            name: None,
+            avatar: None,
+            password_hash: Some(password_hash),
             type_of_signin: type_of_signin.clone(),
+            created_at: now,
+            updated_at: now,
         };
 
         let created_user = self.repo.create_user(new_user).await?;
@@ -58,7 +65,12 @@ impl AuthService {
             .await?
             .ok_or_else(|| anyhow!("Invalid email or password"))?;
 
-        let is_valid = verify_password(&req.password, &user.password_hash)?;
+        let hash_str = user
+            .password_hash
+            .as_deref()
+            .ok_or_else(|| anyhow!("Invalid authentication type for password login"))?;
+
+        let is_valid = verify_password(&req.password, hash_str)?;
         if !is_valid {
             return Err(anyhow!("Invalid email or password"));
         }

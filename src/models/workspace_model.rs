@@ -3,19 +3,13 @@ use bson::DateTime;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct User {
+pub struct Workspace {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
+    pub user_id: ObjectId,
+    pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub firebase_uid: Option<String>,
-    pub email: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub avatar: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub password_hash: Option<String>,
-    pub type_of_signin: String,
+    pub description: Option<String>,
     #[serde(default = "DateTime::now")]
     pub created_at: DateTime,
     #[serde(default = "DateTime::now")]

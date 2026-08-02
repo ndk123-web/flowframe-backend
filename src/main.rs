@@ -34,6 +34,9 @@ async fn main() {
      * Rust restricts that variable only will have 1 owner
      * in axum runs multiple threads for handling requests, so rust will restrict when we do not use Arc
      * after use Arc now means add that data into heap and then all threads shares ownership same data
+     *
+     * initializing all the services inside the AppState,
+     * visualize as, handler(App_State(Service(Repo)))
      */
     let app_state = Arc::new(AppState::new(config, db));
 
