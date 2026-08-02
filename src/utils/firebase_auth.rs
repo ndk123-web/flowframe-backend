@@ -21,6 +21,30 @@ pub struct FirebaseClaims {
     pub picture: Option<String>,
 }
 
+/*
+    we have idToken of firebase
+    we need to check that whether the signature inside id_token is created by google or not 
+
+    1. Read JWT Header
+    ↓
+    2. Extract kid
+    ↓
+    3. Download Google's certificates
+    ↓
+    4. Find certificate matching kid
+    ↓
+    5. Extract Google Public Key
+    ↓
+    6. Verify Signature
+    ↓
+    7. Verify exp
+    ↓
+    8. Verify aud
+    ↓
+    9. Verify iss
+    ↓
+    10. Return Claims
+*/
 pub async fn verify_firebase_id_token(id_token: &str) -> Result<FirebaseClaims> {
     // 1. Decode token header to get kid (key ID)
     let header = decode_header(id_token)?;
@@ -41,6 +65,7 @@ pub async fn verify_firebase_id_token(id_token: &str) -> Result<FirebaseClaims> 
         .ok_or_else(|| anyhow!("Google public key not found for kid: {}", kid))?;
 
     // 3. Create decoding key from x509 certificate PEM
+    // here decoding_key is parsed public key from cert_pem
     let decoding_key = DecodingKey::from_rsa_pem(cert_pem.as_bytes())?;
 
     // 4. Validate claims
