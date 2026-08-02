@@ -1,5 +1,6 @@
 use crate::dtos::signin_dto::SignInRequest;
 use crate::dtos::signup_dto::SignUpRequest;
+use crate::dtos::sync_dto::SyncUserRequest;
 use crate::state::app_state::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde_json::json;
@@ -27,6 +28,20 @@ pub async fn signin_handler(
         Ok(res) => (StatusCode::OK, Json(res)).into_response(),
         Err(err) => (
             StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": err.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn sync_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SyncUserRequest>,
+) -> impl IntoResponse {
+    match state.auth_service.sync_user(payload).await {
+        Ok(res) => (StatusCode::OK, Json(res)).into_response(),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
             Json(json!({ "error": err.to_string() })),
         )
             .into_response(),

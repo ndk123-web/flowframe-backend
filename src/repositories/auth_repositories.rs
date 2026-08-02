@@ -42,7 +42,7 @@ impl AuthRepository {
         name: Option<String>,
         avatar: Option<String>,
     ) -> Result<User> {
-        if let Some(existing_user) = self.find_by_email(email).await? {
+        if self.find_by_email(email).await?.is_some() {
             // Update existing user with firebase_uid and latest details
             let filter = doc! { "email": email };
             let now = DateTime::now();

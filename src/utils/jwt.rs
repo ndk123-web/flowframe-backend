@@ -1,5 +1,5 @@
 use anyhow::Result;
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -28,4 +28,14 @@ pub fn generate_jwt(user_id: &str, email: &str, secret: &str) -> Result<String> 
     )?;
 
     Ok(token)
+}
+
+pub fn verify_jwt(token: &str, secret: &str) -> Result<Claims> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &Validation::default(),
+    )?;
+
+    Ok(token_data.claims)
 }
