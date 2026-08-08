@@ -26,6 +26,8 @@ mod utils;
 use config::configs::Config;
 use db::connections::create_database;
 use routes::auth_routes::auth_router;
+use routes::diagram_routes::diagram_router;
+use routes::workspace_routes::workspace_router;
 use state::app_state::AppState;
 
 /// Custom Logger Middleware: Prints Method, Path, Status Code, and Latency for EVERY Request
@@ -57,12 +59,14 @@ async fn request_response_logger(req: Request, next: Next) -> impl IntoResponse 
 
 #[tokio::main]
 async fn main() {
-    // Load .env
-    dotenvy::from_filename("src/.env").ok();
+    // Load .env from root first, then fallback to src/.env
     dotenvy::dotenv().ok();
+    dotenvy::from_filename("src/.env").ok();
 
     let config = Config::from_env();
     let db = create_database(&config.database_url, &config.database_name).await;
+
+    println!("{:?}/{:?}", config.database_url, config.database_name);
 
     let app_state = Arc::new(AppState::new(config, db));
 
@@ -75,6 +79,9 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index_fn))
         .nest("/api/auth", auth_router())
+        .nest("/api/workspaces", workspace_router(app_state.clone()))
+        .nest("/api/workspaces", diagram_router(app_state.clone()))
+        .nest("/api/diagrams", diagram_router(app_state.clone()))
         .layer(from_fn(request_response_logger))
         .layer(cors)
         .with_state(app_state);

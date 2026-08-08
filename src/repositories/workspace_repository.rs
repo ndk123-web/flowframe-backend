@@ -47,6 +47,9 @@ impl WorkspaceRepository {
         user_id: &ObjectId,
         name: String,
         description: Option<String>,
+        env: String,
+        color: Option<String>,
+        icon_type: Option<String>,
     ) -> Result<Option<Workspace>> {
         let filter = doc! { "_id": id, "user_id": user_id };
         let now = DateTime::now();
@@ -54,6 +57,9 @@ impl WorkspaceRepository {
             "$set": {
                 "name": name,
                 "description": description,
+                "env": env,
+                "color": color,
+                "icon_type": icon_type,
                 "updated_at": now
             }
         };

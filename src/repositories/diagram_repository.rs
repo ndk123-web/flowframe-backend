@@ -2,6 +2,7 @@ use crate::models::diagram_model::Diagram;
 use anyhow::Result;
 use bson::{doc, oid::ObjectId, DateTime};
 use futures::TryStreamExt;
+use mongodb::options::FindOptions;
 use mongodb::{Collection, Database};
 
 #[derive(Clone)]
@@ -30,6 +31,25 @@ impl DiagramRepository {
     ) -> Result<Vec<Diagram>> {
         let filter = doc! { "workspace_id": workspace_id, "user_id": user_id };
         let mut cursor = self.diagram_collection.find(filter).await?;
+        let mut diagrams = Vec::new();
+        while let Some(d) = cursor.try_next().await? {
+            diagrams.push(d);
+        }
+        Ok(diagrams)
+    }
+
+    pub async fn find_recent_by_user(
+        &self,
+        user_id: &ObjectId,
+        limit: i64,
+    ) -> Result<Vec<Diagram>> {
+        let filter = doc! { "user_id": user_id };
+        let find_options = FindOptions::builder()
+            .sort(doc! { "updated_at": -1 })
+            .limit(limit)
+            .build();
+
+        let mut cursor = self.diagram_collection.find(filter).with_options(find_options).await?;
         let mut diagrams = Vec::new();
         while let Some(d) = cursor.try_next().await? {
             diagrams.push(d);
