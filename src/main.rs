@@ -59,12 +59,14 @@ async fn request_response_logger(req: Request, next: Next) -> impl IntoResponse 
 
 #[tokio::main]
 async fn main() {
-    // Load .env
-    dotenvy::from_filename("src/.env").ok();
+    // Load .env from root first, then fallback to src/.env
     dotenvy::dotenv().ok();
+    dotenvy::from_filename("src/.env").ok();
 
     let config = Config::from_env();
     let db = create_database(&config.database_url, &config.database_name).await;
+
+    println!("{:?}/{:?}", config.database_url, config.database_name);
 
     let app_state = Arc::new(AppState::new(config, db));
 

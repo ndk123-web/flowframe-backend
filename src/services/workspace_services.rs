@@ -1,4 +1,4 @@
-use crate::dtos::workspace_dto::{CreateWorkspaceRequest, WorkspaceResponse};
+use crate::dtos::workspace_dto::{CreateWorkspaceRequest, UpdateWorkspaceRequest, WorkspaceResponse};
 use crate::models::workspace_model::Workspace;
 use crate::repositories::diagram_repository::DiagramRepository;
 use crate::repositories::workspace_repository::WorkspaceRepository;
@@ -123,6 +123,60 @@ impl WorkspaceService {
             diagrams_count: diagrams.len() as i64,
             created_at: ws.created_at.to_string(),
             updated_at: ws.updated_at.to_string(),
+        })
+    }
+
+    pub async fn update_workspace(
+        &self,
+        workspace_id_str: &str,
+        user_id_str: &str,
+        req: UpdateWorkspaceRequest,
+    ) -> Result<WorkspaceResponse> {
+        let ws_id = ObjectId::parse_str(workspace_id_str)?;
+        let user_id = ObjectId::parse_str(user_id_str)?;
+
+        let existing = self
+            .workspace_repo
+            .find_by_id(&ws_id, &user_id)
+            .await?
+            .ok_or_else(|| anyhow!("Workspace not found"))?;
+
+        let name = req.name.unwrap_or(existing.name);
+        let description = req.description.or(existing.description);
+        let env = req.env.unwrap_or(existing.env);
+        let color = req.color.or(existing.color);
+        let icon_type = req.icon_type.or(existing.icon_type);
+
+        let updated = self
+            .workspace_repo
+            .update_workspace(
+                &ws_id,
+                &user_id,
+                name,
+                description,
+                env,
+                color,
+                icon_type,
+            )
+            .await?
+            .ok_or_else(|| anyhow!("Failed to update workspace"))?;
+
+        let diagrams = self
+            .diagram_repo
+            .find_by_workspace(&ws_id, &user_id)
+            .await?;
+
+        Ok(WorkspaceResponse {
+            id: ws_id.to_hex(),
+            user_id: user_id_str.to_string(),
+            name: updated.name,
+            description: updated.description,
+            env: updated.env,
+            color: updated.color,
+            icon_type: updated.icon_type,
+            diagrams_count: diagrams.len() as i64,
+            created_at: updated.created_at.to_string(),
+            updated_at: updated.updated_at.to_string(),
         })
     }
 

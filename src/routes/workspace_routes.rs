@@ -1,6 +1,6 @@
 use crate::handlers::workspace_handlers::{
     create_workspace_handler, delete_workspace_handler, get_user_workspaces_handler,
-    get_workspace_by_id_handler,
+    get_workspace_by_id_handler, update_workspace_handler,
 };
 use crate::middleware::jwt_auth::jwt_auth_middleware;
 use crate::state::app_state::AppState;
@@ -19,7 +19,9 @@ pub fn workspace_router(state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/{id}",
-            get(get_workspace_by_id_handler).delete(delete_workspace_handler),
+            get(get_workspace_by_id_handler)
+                .put(update_workspace_handler)
+                .delete(delete_workspace_handler),
         )
         .layer(from_fn_with_state(state, jwt_auth_middleware))
 }

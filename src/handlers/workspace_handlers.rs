@@ -1,4 +1,4 @@
-use crate::dtos::workspace_dto::CreateWorkspaceRequest;
+use crate::dtos::workspace_dto::{CreateWorkspaceRequest, UpdateWorkspaceRequest};
 use crate::middleware::jwt_auth::AuthUserExtension;
 use crate::state::app_state::AppState;
 use axum::{
@@ -60,6 +60,26 @@ pub async fn get_workspace_by_id_handler(
         Ok(res) => (StatusCode::OK, Json(json!(res))).into_response(),
         Err(err) => (
             StatusCode::NOT_FOUND,
+            Json(json!({ "error": err.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn update_workspace_handler(
+    State(state): State<Arc<AppState>>,
+    Extension(auth_user): Extension<AuthUserExtension>,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateWorkspaceRequest>,
+) -> impl IntoResponse {
+    match state
+        .workspace_service
+        .update_workspace(&id, &auth_user.user_id, payload)
+        .await
+    {
+        Ok(res) => (StatusCode::OK, Json(json!(res))).into_response(),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
             Json(json!({ "error": err.to_string() })),
         )
             .into_response(),

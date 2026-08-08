@@ -10,6 +10,15 @@ pub struct CreateWorkspaceRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateWorkspaceRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub env: Option<String>,
+    pub color: Option<String>,
+    pub icon_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WorkspaceResponse {
     pub id: String,
     pub user_id: String,
