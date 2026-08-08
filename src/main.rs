@@ -59,9 +59,8 @@ async fn request_response_logger(req: Request, next: Next) -> impl IntoResponse 
 
 #[tokio::main]
 async fn main() {
-    // Load .env from root first, then fallback to src/.env
+    // Load single root .env file
     dotenvy::dotenv().ok();
-    dotenvy::from_filename("src/.env").ok();
 
     let config = Config::from_env();
     let db = create_database(&config.database_url, &config.database_name).await;
@@ -70,10 +69,19 @@ async fn main() {
 
     let app_state = Arc::new(AppState::new(config, db));
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let frontend_url = std::env::var("FRONTEND_URL").ok();
+    let cors = if let Some(ref origin_url) = frontend_url {
+        if let Ok(header_val) = origin_url.parse::<axum::http::HeaderValue>() {
+            CorsLayer::new()
+                .allow_origin(header_val)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        } else {
+            CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+        }
+    } else {
+        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+    };
 
     // Assembly of routes
     let app = Router::new()
@@ -86,11 +94,15 @@ async fn main() {
         .layer(cors)
         .with_state(app_state);
 
-    let tcp_listener = TcpListener::bind("127.0.0.1:8000")
-        .await
-        .expect("Issue in tcp_listener");
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let bind_addr = format!("{}:{}", host, port);
 
-    println!("🚀 FLOWFRAME SERVER RUNNING: http://127.0.0.1:8000");
+    let tcp_listener = TcpListener::bind(&bind_addr)
+        .await
+        .unwrap_or_else(|_| panic!("Issue binding TcpListener to {}", bind_addr));
+
+    println!("🚀 FLOWFRAME SERVER RUNNING: http://{}", bind_addr);
 
     axum::serve(tcp_listener, app)
         .await
