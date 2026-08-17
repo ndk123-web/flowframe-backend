@@ -163,6 +163,36 @@ impl DiagramService {
         })
     }
 
+    pub async fn get_public_diagram(&self, diagram_id_str: &str) -> Result<DiagramResponse> {
+        let d_id = ObjectId::parse_str(diagram_id_str)?;
+
+        let d = self
+            .diagram_repo
+            .find_by_id_public(&d_id)
+            .await?
+            .ok_or_else(|| anyhow!("Diagram not found"))?;
+
+        let nodes_count = d.nodes.as_array().map(|a| a.len()).unwrap_or(0);
+        let edges_count = d.edges.as_array().map(|a| a.len()).unwrap_or(0);
+
+        Ok(DiagramResponse {
+            id: d.id.unwrap().to_hex(),
+            workspace_id: d.workspace_id.to_hex(),
+            user_id: d.user_id.to_hex(),
+            title: d.title,
+            description: d.description,
+            version: d.version,
+            nodes: d.nodes,
+            edges: d.edges,
+            configs: d.configs,
+            viewport: d.viewport,
+            nodes_count,
+            edges_count,
+            created_at: d.created_at.to_string(),
+            updated_at: d.updated_at.to_string(),
+        })
+    }
+
     pub async fn update_diagram(
         &self,
         diagram_id_str: &str,
