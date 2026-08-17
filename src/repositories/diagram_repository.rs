@@ -63,6 +63,12 @@ impl DiagramRepository {
         Ok(diagram)
     }
 
+    pub async fn find_by_id_public(&self, id: &ObjectId) -> Result<Option<Diagram>> {
+        let filter = doc! { "_id": id };
+        let diagram = self.diagram_collection.find_one(filter).await?;
+        Ok(diagram)
+    }
+
     pub async fn update_diagram(
         &self,
         id: &ObjectId,

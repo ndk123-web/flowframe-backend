@@ -1,6 +1,7 @@
 use crate::handlers::diagram_handlers::{
     create_diagram_handler, delete_diagram_handler, get_diagram_by_id_handler,
-    get_recent_diagrams_handler, get_workspace_diagrams_handler, update_diagram_handler,
+    get_public_diagram_handler, get_recent_diagrams_handler, get_workspace_diagrams_handler,
+    update_diagram_handler,
 };
 use crate::middleware::jwt_auth::jwt_auth_middleware;
 use crate::state::app_state::AppState;
@@ -28,4 +29,10 @@ pub fn diagram_router(state: Arc<AppState>) -> Router<Arc<AppState>> {
                 .delete(delete_diagram_handler),
         )
         .layer(from_fn_with_state(state, jwt_auth_middleware))
+}
+
+pub fn share_diagram_router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/{diagram_id}", get(get_public_diagram_handler))
+        .route("/diagrams/{diagram_id}", get(get_public_diagram_handler))
 }

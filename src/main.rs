@@ -26,7 +26,7 @@ mod utils;
 use config::configs::Config;
 use db::connections::create_database;
 use routes::auth_routes::auth_router;
-use routes::diagram_routes::diagram_router;
+use routes::diagram_routes::{diagram_router, share_diagram_router};
 use routes::workspace_routes::workspace_router;
 use state::app_state::AppState;
 
@@ -87,6 +87,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index_fn))
         .nest("/api/auth", auth_router())
+        .nest("/api/share", share_diagram_router())
         .nest("/api/workspaces", workspace_router(app_state.clone()))
         .nest("/api/workspaces", diagram_router(app_state.clone()))
         .nest("/api/diagrams", diagram_router(app_state.clone()))

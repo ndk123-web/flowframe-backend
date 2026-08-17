@@ -68,6 +68,20 @@ pub async fn get_diagram_by_id_handler(
     }
 }
 
+pub async fn get_public_diagram_handler(
+    State(state): State<Arc<AppState>>,
+    Path(diagram_id): Path<String>,
+) -> impl IntoResponse {
+    match state.diagram_service.get_public_diagram(&diagram_id).await {
+        Ok(res) => (StatusCode::OK, Json(json!(res))).into_response(),
+        Err(err) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": err.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
 pub async fn update_diagram_handler(
     State(state): State<Arc<AppState>>,
     Extension(auth_user): Extension<AuthUserExtension>,
