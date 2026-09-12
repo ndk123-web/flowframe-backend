@@ -69,19 +69,17 @@ async fn main() {
 
     let app_state = Arc::new(AppState::new(config, db));
 
-    let frontend_url = std::env::var("FRONTEND_URL").ok();
-    let cors = if let Some(ref origin_url) = frontend_url {
-        if let Ok(header_val) = origin_url.parse::<axum::http::HeaderValue>() {
-            CorsLayer::new()
-                .allow_origin(header_val)
-                .allow_methods(Any)
-                .allow_headers(Any)
-        } else {
-            CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
-        }
-    } else {
-        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
-    };
+    let allowed_origins = [
+        "http://localhost:3000".parse::<axum::http::HeaderValue>().unwrap(),
+        "http://127.0.0.1:3000".parse::<axum::http::HeaderValue>().unwrap(),
+        "https://flowframe.taskplexus.app".parse::<axum::http::HeaderValue>().unwrap(),
+        "https://flowframe.ndkdev.tech".parse::<axum::http::HeaderValue>().unwrap(),
+    ];
+
+    let cors = CorsLayer::new()
+        .allow_origin(allowed_origins)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     // Assembly of routes
     let app = Router::new()
