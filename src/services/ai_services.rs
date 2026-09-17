@@ -502,6 +502,12 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 - Rule 06 (PubSub Event Fan-Out): PubSub brokers broadcast published event messages to all subscribed servers registered with the matching topic channel.
 - Rule 07 (Valet Key Pre-Signed Uploads): When valet: true, client requests upload token from server, then streams data directly.
 - Rule 08 (Queue Overflow Controls): MessageQueue buffers exceeding queueSize adhere to BLOCK (producer waits) or REJECT (503 error).
+- - Rule 09 (Identifier Restrictions):
+    Identifiers MUST NOT be equal to any component type name
+    (client, server, gateway, loadbalancer, redis, postgres,
+    messagequeue, pubsub), case-insensitively, and MUST NOT contain "-".
+    Example: `server`, `redis`, `my-server` are INVALID.
+    Use valid identifiers such as `s1`, `r1`, `orderServer`, `db1`.
 
 2. SYNTAX & TOKEN RULES:
 - The 'define' keyword is optional (e.g. `define CLIENT c1 { ... }` or `CLIENT c1 { ... }`).
