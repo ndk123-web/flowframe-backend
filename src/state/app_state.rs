@@ -1,10 +1,12 @@
-use crate::config::configs::Config;
+﻿use crate::config::configs::Config;
 use crate::repositories::auth_repositories::AuthRepository;
 use crate::repositories::diagram_repository::DiagramRepository;
 use crate::repositories::workspace_repository::WorkspaceRepository;
+use crate::repositories::ai_repository::AiRepository;
 use crate::services::auth_services::AuthService;
 use crate::services::diagram_services::DiagramService;
 use crate::services::workspace_services::WorkspaceService;
+use crate::services::ai_services::AiService;
 use mongodb::Database;
 
 #[allow(dead_code)]
@@ -15,6 +17,7 @@ pub struct AppState {
     pub auth_service: AuthService,
     pub workspace_service: WorkspaceService,
     pub diagram_service: DiagramService,
+    pub ai_service: AiService,
 }
 
 impl AppState {
@@ -22,12 +25,21 @@ impl AppState {
         let auth_repo = AuthRepository::new(&db);
         let workspace_repo = WorkspaceRepository::new(&db);
         let diagram_repo = DiagramRepository::new(&db);
+        let ai_repo = AiRepository::new(&db);
 
         let auth_service = AuthService::new(auth_repo, config.jwt_secret.clone());
         let workspace_service =
             WorkspaceService::new(workspace_repo.clone(), diagram_repo.clone());
         let diagram_service =
             DiagramService::new(diagram_repo.clone(), workspace_repo.clone());
+        let ai_service = AiService::new(
+            ai_repo,
+            workspace_repo.clone(),
+            diagram_repo.clone(),
+            config.gemini_api_key.clone(),
+            config.gemini_model.clone(),
+            config.openrouter_api_key.clone(),
+        );
 
         Self {
             config,
@@ -35,6 +47,7 @@ impl AppState {
             auth_service,
             workspace_service,
             diagram_service,
+            ai_service,
         }
     }
 }
