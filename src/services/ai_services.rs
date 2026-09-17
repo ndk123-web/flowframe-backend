@@ -502,42 +502,42 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 - Rule 06 (PubSub Event Fan-Out): PubSub brokers broadcast published event messages to all subscribed servers registered with the matching topic channel.
 - Rule 07 (Valet Key Pre-Signed Uploads): When valet: true, client requests upload token from server, then streams data directly.
 - Rule 08 (Queue Overflow Controls): MessageQueue buffers exceeding queueSize adhere to BLOCK (producer waits) or REJECT (503 error).
-- - Rule 09 (Identifier Restrictions):
+- Rule 09 (Identifier Restrictions):
     Identifiers MUST NOT be equal to any component type name
     (client, server, gateway, loadbalancer, redis, postgres,
-    messagequeue, pubsub), case-insensitively, and MUST NOT contain "-".
-    Example: `server`, `redis`, `my-server` are INVALID.
-    Use valid identifiers such as `s1`, `r1`, `orderServer`, `db1`.
+    messagequeue, pubsub), case-insensitively, and MUST NOT contain hyphens ("-").
+    Examples: `server`, `redis`, `client-1`, `server-1` are STRICTLY INVALID syntax!
+    Always use valid alphanumeric identifiers: `c1`, `s1`, `s2`, `lb1`, `gw1`, `r1`, `db1`, `mq1`, `ps1` (or `client_1`, `server_1`).
+- Rule 10 (Canvas Spatial Layout - Mandatory x & y):
+    Every declared component MUST have explicit 'x' and 'y' integer coordinates to render a clean, structured canvas layout.
+    Flow must be horizontally structured from left to right:
+      - Ingress / Clients: `x: 80, y: 220` (or centered)
+      - Ingress Routing / Gateways / Load Balancers: `x: 380, y: 220`
+      - Application Servers: `x: 680`, with each server vertically stacked (e.g. `y: 40`, `y: 140`, `y: 240`, `y: 340`, `y: 440` with ~100px vertical gap)
+      - Storage / Databases / Caches / Queues (Postgres, Redis, MessageQueue, PubSub): `x: 980` (or `x: 1080`), vertically aligned with connected servers
 
 2. SYNTAX & TOKEN RULES:
 - The 'define' keyword is optional (e.g. `define CLIENT c1 { ... }` or `CLIENT c1 { ... }`).
 - Node types: CLIENT, SERVER, GATEWAY, LOADBALANCER, REDIS, POSTGRES, MESSAGEQUEUE, PUBSUB. Case-insensitive.
-- Identifiers: Unique concise identifiers (e.g. c1, s1, s2, lb1, gw1, r1, db1, mq1, postPubsub).
+- Identifiers: Short concise names (e.g. c1, s1, s2, lb1, gw1, r1, db1, mq1, postPubsub). NEVER use hyphens ("-")!
+- Coordinates: Every component MUST include `x:` and `y:` integer coordinates.
 - Connections: Use arrow chaining `c1 -> gw1 -> lb1 -> s1` or `connect lb1 -> s2` or `s1 -> mq1`.
-- Coordinates: (x, y) are NOT required; visual canvas auto-arranges nodes.
 
-3. SUPPORTED COMPONENT SCHEMAS (8 NODES):
+3. SUPPORTED COMPONENT SCHEMAS WITH MANDATORY (x, y):
 - CLIENT:
   define CLIENT c1 {
+    x: 80,
+    y: 220,
     label: "Mobile Client",
     requests: [
       { endpoint: "/api/v1/orders", allowedMethods: ["POST"], key: "rohan" }
     ]
   }
 
-- SERVER:
-  define SERVER s1 {
-    label: "Order Server Instance 1",
-    capacity: 50,
-    prefetchLimit: 10,
-    acceptedEndpoints: [
-      { endpoint: "/api/v1/orders", allowedMethod: ["POST"] }
-    ],
-    registeredTopics: ["post.created"]
-  }
-
 - GATEWAY:
   define GATEWAY gw1 {
+    x: 380,
+    y: 220,
     label: "AWS API Gateway",
     strategy: "ROUND_ROBIN",
     routes: [
@@ -548,18 +548,37 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 
 - LOADBALANCER:
   define LOADBALANCER lb1 {
+    x: 380,
+    y: 220,
     label: "Order Service LoadBalancer",
     strategy: "ROUND_ROBIN"
   }
 
+- SERVER:
+  define SERVER s1 {
+    x: 680,
+    y: 60,
+    label: "Order Server Instance 1",
+    capacity: 50,
+    prefetchLimit: 10,
+    acceptedEndpoints: [
+      { endpoint: "/api/v1/orders", allowedMethod: ["POST"] }
+    ],
+    registeredTopics: ["post.created"]
+  }
+
 - REDIS:
   define REDIS r1 {
+    x: 980,
+    y: 60,
     label: "Redis Cache 1",
     data: [{ key: "rohan", value: "cached data for rohan" }]
   }
 
 - POSTGRES:
   define POSTGRES db1 {
+    x: 980,
+    y: 180,
     label: "Postgres Database 1",
     table: "users",
     data: [{ key: "rohan", value: "db record data" }]
@@ -567,6 +586,8 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 
 - MESSAGEQUEUE:
   define MESSAGEQUEUE mq1 {
+    x: 980,
+    y: 300,
     label: "Post Queue",
     processingType: "FIFO",
     queueSize: 50,
@@ -575,12 +596,14 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 
 - PUBSUB:
   define PUBSUB postPubsub {
+    x: 980,
+    y: 420,
     label: "PostPubSub 1",
     topic: "post.created"
   }
 
 4. CONNECTIONS:
-connect c1 -> gw1 -> lb1 -> s1
+connect c1 -> lb1 -> s1
 connect lb1 -> s2
 s1 -> mq1
 s1 -> r1
@@ -599,6 +622,8 @@ THE THREE MODES:
 
 3. "modify": Propose a complete, compilable FlowFrame DSL architecture.
    - "flow" MUST contain complete, compilable FlowFrame DSL (.flow) script conforming to the specs above.
+   - Every node MUST have `x` and `y` coordinates for clean horizontal layout.
+   - Identifiers MUST NOT contain hyphens and MUST NOT be component type names (use c1, s1, s2, lb1, db1, etc.).
    - Every connection must reference declared node identifiers.
    - Do NOT wrap the DSL in markdown code blocks inside the JSON.
 
