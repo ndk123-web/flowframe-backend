@@ -28,13 +28,14 @@ use db::connections::create_database;
 use routes::auth_routes::auth_router;
 use routes::diagram_routes::{diagram_router, share_diagram_router};
 use routes::workspace_routes::workspace_router;
+use routes::ai_routes::ai_router;
 use state::app_state::AppState;
 
 /// Custom Logger Middleware: Prints Method, Path, Status Code, and Latency for EVERY Request
 async fn request_response_logger(req: Request, next: Next) -> impl IntoResponse {
     let method = req.method().clone();
     let uri = req.uri().clone();
-    let start = Instant::now();
+    let start = std::time::Instant::now();
 
     let response = next.run(req).await;
 
@@ -42,11 +43,11 @@ async fn request_response_logger(req: Request, next: Next) -> impl IntoResponse 
     let status = response.status();
 
     let status_icon = if status.is_success() {
-        "✅"
+        "✓"
     } else if status.is_client_error() {
-        "⚠️"
+        "⚠"
     } else {
-        "❌"
+        "✖"
     };
 
     println!(
@@ -89,6 +90,7 @@ async fn main() {
         .nest("/api/workspaces", workspace_router(app_state.clone()))
         .nest("/api/workspaces", diagram_router(app_state.clone()))
         .nest("/api/diagrams", diagram_router(app_state.clone()))
+        .nest("/api/ai", ai_router(app_state.clone()))
         .layer(from_fn(request_response_logger))
         .layer(cors)
         .with_state(app_state);
@@ -101,7 +103,7 @@ async fn main() {
         .await
         .unwrap_or_else(|_| panic!("Issue binding TcpListener to {}", bind_addr));
 
-    println!("🚀 FLOWFRAME SERVER RUNNING: http://{}", bind_addr);
+    println!("⚡ FLOWFRAME SERVER RUNNING: http://{}", bind_addr);
 
     axum::serve(tcp_listener, app)
         .await

@@ -4,3 +4,4 @@ pub mod signin_dto;
 pub mod signup_dto;
 pub mod sync_dto;
 pub mod workspace_dto;
+pub mod ai_dto;
