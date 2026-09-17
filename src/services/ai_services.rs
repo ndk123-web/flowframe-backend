@@ -208,9 +208,7 @@ impl AiService {
     async fn call_gemini_with_fallback(&self, payload: &Value) -> Result<String> {
         let mut candidate_models = vec![
             self.gemini_model.clone(),
-            "gemini-2.5-flash".to_string(),
-            "gemini-2.0-flash".to_string(),
-            "gemini-2.0-flash-lite".to_string(),
+            "gemini-flash-latest".to_string(),
         ];
         // Deduplicate while preserving order
         let mut seen = std::collections::HashSet::new();
@@ -303,8 +301,8 @@ No credits were deducted. Please retry in a moment. Last Gemini error: {}",
         ))
     }
 
-    /// OpenRouter chat-completions fallback using a free model.
-    /// Converts the Gemini-format payload to OpenAI-compatible messages.
+    /// OpenRouter chat-completions fallback across multiple free models.
+    /// Converts Gemini-format payload to OpenAI-compatible format and tries models sequentially.
     async fn call_openrouter_fallback(&self, gemini_payload: &Value) -> Result<String> {
         if self.openrouter_api_key.trim().is_empty() {
             return Err(anyhow!("OpenRouter API key not configured"));
@@ -341,41 +339,75 @@ No credits were deducted. Please retry in a moment. Last Gemini error: {}",
             }
         }
 
-        let openrouter_payload = json!({
-            "model": "google/gemini-2.0-flash-exp:free",
-            "messages": messages,
-            "temperature": 0.3,
-            "response_format": { "type": "json_object" }
-        });
+        // Ordered fallback models on OpenRouter (free tier)
+        let openrouter_models = [
+            "inclusionai/ling-3.0-flash-vl:free",
+            "nex-agi/nex-n2.5-mini:free",
+            "nvidia/nemotron-3.5-lightning:free",
+            "poolside/laguna-s-2.1:free",
+        ];
 
-        let response = self
-            .http_client
-            .post("https://openrouter.ai/api/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.openrouter_api_key))
-            .header("Content-Type", "application/json")
-            .header("HTTP-Referer", "https://flowframe.app")
-            .header("X-Title", "FlowFrame Relay AI")
-            .json(&openrouter_payload)
-            .send()
-            .await
-            .map_err(|e| anyhow!("OpenRouter network error: {}", e))?;
+        let mut last_or_err = String::new();
 
-        let status = response.status();
-        if !status.is_success() {
-            let err_body = response.text().await.unwrap_or_default();
-            return Err(anyhow!("OpenRouter returned {}: {}", status, err_body));
+        for model in &openrouter_models {
+            let openrouter_payload = json!({
+                "model": model,
+                "messages": messages,
+                "temperature": 0.3,
+            });
+
+            tracing::info!("Attempting OpenRouter fallback model: {}", model);
+
+            let response_res = self
+                .http_client
+                .post("https://openrouter.ai/api/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", self.openrouter_api_key))
+                .header("Content-Type", "application/json")
+                .header("HTTP-Referer", "https://flowframe.app")
+                .header("X-Title", "FlowFrame Relay AI")
+                .json(&openrouter_payload)
+                .send()
+                .await;
+
+            match response_res {
+                Ok(response) => {
+                    let status = response.status();
+                    if status.is_success() {
+                        let or_resp: Value = match response.json().await {
+                            Ok(v) => v,
+                            Err(e) => {
+                                last_or_err = format!("OpenRouter model {} JSON parse error: {}", model, e);
+                                tracing::warn!("{}", last_or_err);
+                                continue;
+                            }
+                        };
+
+                        if let Some(text) = or_resp["choices"][0]["message"]["content"].as_str() {
+                            let trimmed = text.trim();
+                            if !trimmed.is_empty() {
+                                tracing::info!("OpenRouter model {} succeeded", model);
+                                return Ok(trimmed.to_string());
+                            }
+                        }
+                        last_or_err = format!("Empty content returned from OpenRouter model {}", model);
+                        tracing::warn!("{}", last_or_err);
+                    } else {
+                        let err_body = response.text().await.unwrap_or_default();
+                        last_or_err = format!("Model {} returned ({}): {}", model, status, err_body);
+                        tracing::warn!("OpenRouter model {} failed: {}", model, last_or_err);
+                    }
+                }
+                Err(e) => {
+                    last_or_err = format!("Network error with OpenRouter model {}: {}", model, e);
+                    tracing::warn!("{}", last_or_err);
+                }
+            }
         }
 
-        let or_resp: Value = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("Failed to parse OpenRouter response: {}", e))?;
-
-        let text = or_resp["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| anyhow!("Empty content from OpenRouter response"))?;
-
-        Ok(text.to_string())
+        Err(anyhow!(
+            "All OpenRouter fallback models failed. Last error: {}",
+            last_or_err
+        ))
     }
 
     /// Read usage statistics for a user
@@ -454,62 +486,115 @@ No credits were deducted. Please retry in a moment. Last Gemini error: {}",
 
     fn build_system_prompt(&self) -> String {
         r#"You are Relay, the elite AI Systems Architect and Distributed Engine Copilot for FlowFrame.
-FlowFrame simulates distributed systems (Clients, Load Balancers, Servers, Redis Caches, PostgreSQL, Message Queues, PubSub, Gateways).
-Architectures in FlowFrame are defined in a domain-specific language (DSL).
+FlowFrame simulates distributed systems (Clients, Servers, Gateways, Load Balancers, Redis, PostgreSQL, Message Queues, PubSub).
+Architectures in FlowFrame are written in FlowFrame Domain Specific Language (.flow) v2.0.0.
 
 ==================================================
-FLOWFRAME DSL SYNTAX SPECIFICATION
+FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
 ==================================================
 
-1. NODE DEFINITIONS:
-define <TYPE> <ID> {
-  x: <number>,
-  y: <number>,
-  label: "<string>"
-  // Optional parameters depending on node type
-}
+1. DETERMINISTIC RUNTIME SIMULATION RULES:
+- Rule 01 (Cache-First Precedence): When a Server is connected to both Redis and Postgres, the engine queries Redis first. On CACHE_HIT it returns immediately. Only on CACHE_MISS does the server forward to Postgres.
+- Rule 02 (Postgres TCP Connection Limits): Each server maintains a bounded connection pool defined by tcpConnectionsToPostgres. When concurrent requests exceed capacity, queries wait in POSTGRES_POOL_WAIT queue.
+- Rule 03 (Load Balancer Health Verification): Load Balancers inspect downstream server capacity. If all servers are exhausted, LB rejects with 503 Service Unavailable.
+- Rule 04 (Endpoint & Method Contracts): Servers validate incoming requests against declared acceptedEndpoints and HTTP verbs (GET, POST, PUT, DELETE). Unmatched paths trigger 404 or 405.
+- Rule 05 (Async Message Queue Ack): Publishing to MessageQueue sends an immediate 202 Accepted ack back to client while servers process in background.
+- Rule 06 (PubSub Event Fan-Out): PubSub brokers broadcast published event messages to all subscribed servers registered with the matching topic channel.
+- Rule 07 (Valet Key Pre-Signed Uploads): When valet: true, client requests upload token from server, then streams data directly.
+- Rule 08 (Queue Overflow Controls): MessageQueue buffers exceeding queueSize adhere to BLOCK (producer waits) or REJECT (503 error).
 
-VALID NODE TYPES:
-- CLIENT: Originates HTTP requests
-  Optional properties:
-  requests: [ { endpoint: "/api/path", allowedMethods: ["GET", "POST"], key: "cache:key" } ]
-- SERVER: Computes logic and connects to databases
-  Optional properties:
-  capacity: <number> (e.g. 100),
-  acceptedEndpoints: [ { endpoint: "/api/path", allowedMethod: ["GET", "POST"] } ]
-- LOADBALANCER: Balances traffic
-  strategy: "ROUND_ROBIN" | "LEAST_CONNECTIONS"
-- GATEWAY: Ingress routing gateway
-  strategy: "ROUND_ROBIN"
-- REDIS: In-memory cache layer
-  data: [ { key: "item:1", value: "cached payload" } ]
-- POSTGRES: Relational ACID database
-  data: [ { key: "item:1", value: "persistent row" } ]
-- MESSAGEQUEUE: Asynchronous buffer
-  queueSize: <number>,
-  processingType: "FIFO"
-- PUBSUB: Event fanout broker
-  topic: "<topic.name>"
+2. SYNTAX & TOKEN RULES:
+- The 'define' keyword is optional (e.g. `define CLIENT c1 { ... }` or `CLIENT c1 { ... }`).
+- Node types: CLIENT, SERVER, GATEWAY, LOADBALANCER, REDIS, POSTGRES, MESSAGEQUEUE, PUBSUB. Case-insensitive.
+- Identifiers: Unique concise identifiers (e.g. c1, s1, s2, lb1, gw1, r1, db1, mq1, postPubsub).
+- Connections: Use arrow chaining `c1 -> gw1 -> lb1 -> s1` or `connect lb1 -> s2` or `s1 -> mq1`.
+- Coordinates: (x, y) are NOT required; visual canvas auto-arranges nodes.
 
-2. CONNECTIONS:
-connect <SOURCE_ID> -> <TARGET_ID>
+3. SUPPORTED COMPONENT SCHEMAS (8 NODES):
+- CLIENT:
+  define CLIENT c1 {
+    label: "Mobile Client",
+    requests: [
+      { endpoint: "/api/v1/orders", allowedMethods: ["POST"], key: "rohan" }
+    ]
+  }
+
+- SERVER:
+  define SERVER s1 {
+    label: "Order Server Instance 1",
+    capacity: 50,
+    prefetchLimit: 10,
+    acceptedEndpoints: [
+      { endpoint: "/api/v1/orders", allowedMethod: ["POST"] }
+    ],
+    registeredTopics: ["post.created"]
+  }
+
+- GATEWAY:
+  define GATEWAY gw1 {
+    label: "AWS API Gateway",
+    strategy: "ROUND_ROBIN",
+    routes: [
+      { path: "/api/v1/orders", target: lb1 },
+      { path: "/api/v1/posts", target: s3 }
+    ]
+  }
+
+- LOADBALANCER:
+  define LOADBALANCER lb1 {
+    label: "Order Service LoadBalancer",
+    strategy: "ROUND_ROBIN"
+  }
+
+- REDIS:
+  define REDIS r1 {
+    label: "Redis Cache 1",
+    data: [{ key: "rohan", value: "cached data for rohan" }]
+  }
+
+- POSTGRES:
+  define POSTGRES db1 {
+    label: "Postgres Database 1",
+    table: "users",
+    data: [{ key: "rohan", value: "db record data" }]
+  }
+
+- MESSAGEQUEUE:
+  define MESSAGEQUEUE mq1 {
+    label: "Post Queue",
+    processingType: "FIFO",
+    queueSize: 50,
+    overflowBehavior: "REJECT"
+  }
+
+- PUBSUB:
+  define PUBSUB postPubsub {
+    label: "PostPubSub 1",
+    topic: "post.created"
+  }
+
+4. CONNECTIONS:
+connect c1 -> gw1 -> lb1 -> s1
+connect lb1 -> s2
+s1 -> mq1
+s1 -> r1
+s1 -> db1
 
 ==================================================
 THE THREE MODES:
 ==================================================
-
 1. "ask": Conceptual questions, protocol explanation, or topology explanation.
-   - You MUST NOT return any FlowFrame DSL in the "flow" field. Keep "flow": null.
-   - Provide a clear, insightful explanation of distributed system mechanics.
+   - "flow" field MUST be null.
+   - Provide clear, insightful explanation of distributed system mechanics.
 
 2. "analyze": Architecture health check, bottlenecks, single points of failure.
-   - You MUST NOT mutate the canvas. Keep "flow": null.
+   - "flow" field MUST be null.
    - Identify unrouted components, missing load balancers, database connection bottlenecks, failure dynamics.
 
 3. "modify": Propose a complete, compilable FlowFrame DSL architecture.
-   - You MUST generate valid, syntax-clean FlowFrame DSL in the "flow" field.
-   - Provide clean (x, y) coordinates with horizontal flow (e.g. x: 80, x: 380, x: 680, x: 980).
-   - "Fixing" an architecture is treated as a modify intent.
+   - "flow" MUST contain complete, compilable FlowFrame DSL (.flow) script conforming to the specs above.
+   - Every connection must reference declared node identifiers.
+   - Do NOT wrap the DSL in markdown code blocks inside the JSON.
 
 ==================================================
 OUTPUT FORMAT:
@@ -517,9 +602,9 @@ OUTPUT FORMAT:
 You MUST respond with a single valid, raw JSON object:
 {
   "mode": "ask" | "analyze" | "modify",
-  "message": "High-level summary of the answer or changes",
+  "message": "Concise summary of the response or changes",
   "explanation": "Detailed technical explanation formatted in markdown",
-  "flow": "Full FlowFrame DSL code string (ONLY for modify mode, otherwise null)",
+  "flow": "Full FlowFrame DSL (.flow) script (ONLY for modify mode, otherwise null)",
   "thought_process": "Step-by-step reasoning trace"
 }
 "#.to_string()
@@ -592,15 +677,15 @@ User Request: {}
     fn extract_structured_json(&self, raw_text: &str, mode: &str) -> Result<Value> {
         let trimmed = raw_text.trim();
 
-        // Attempt direct JSON parse
+        // 1. Attempt direct JSON parse
         if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
             return Ok(v);
         }
 
-        // Strip markdown ```json ... ```
+        // 2. Strip markdown ```json ... ``` using rfind to correctly handle inner backticks
         if let Some(start) = trimmed.find("```json") {
             let slice = &trimmed[start + 7..];
-            if let Some(end) = slice.find("```") {
+            if let Some(end) = slice.rfind("```") {
                 let code_part = slice[..end].trim();
                 if let Ok(v) = serde_json::from_str::<Value>(code_part) {
                     return Ok(v);
@@ -608,7 +693,7 @@ User Request: {}
             }
         } else if let Some(start) = trimmed.find("```") {
             let slice = &trimmed[start + 3..];
-            if let Some(end) = slice.find("```") {
+            if let Some(end) = slice.rfind("```") {
                 let code_part = slice[..end].trim();
                 if let Ok(v) = serde_json::from_str::<Value>(code_part) {
                     return Ok(v);
@@ -616,7 +701,28 @@ User Request: {}
             }
         }
 
-        // Fallback structured value
+        // 3. Extract outermost { ... } brace pair
+        if let (Some(first_b), Some(last_b)) = (trimmed.find('{'), trimmed.rfind('}')) {
+            if last_b > first_b {
+                let candidate = &trimmed[first_b..=last_b];
+                if let Ok(v) = serde_json::from_str::<Value>(candidate) {
+                    return Ok(v);
+                }
+            }
+        }
+
+        // 4. Fallback: if raw_text is pure FlowFrame DSL without JSON wrapping
+        if trimmed.contains("define ") || trimmed.contains("connect ") || trimmed.contains("->") {
+            return Ok(json!({
+                "mode": mode,
+                "message": "Generated FlowFrame DSL architecture.",
+                "explanation": "Architecture generated successfully.",
+                "flow": trimmed,
+                "thought_process": null
+            }));
+        }
+
+        // 5. Fallback structured value
         Ok(json!({
             "mode": mode,
             "message": trimmed,
