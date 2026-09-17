@@ -206,13 +206,15 @@ impl AiService {
     /// Calls Gemini API with automatic retries and model fallback.
     /// If ALL Gemini models fail (e.g. 503 overload), falls back to OpenRouter.
     async fn call_gemini_with_fallback(&self, payload: &Value) -> Result<String> {
-        let mut candidate_models = vec![
-            self.gemini_model.clone(),
-            "gemini-flash-latest".to_string(),
+        // Exclusively use gemini-3.8-flash; all other Gemini models removed.
+        // If gemini-3.8-flash fails or is overloaded, falls back directly to OpenRouter.
+        let candidate_models = vec![
+            if self.gemini_model.trim().is_empty() {
+                "gemini-3.8-flash".to_string()
+            } else {
+                self.gemini_model.clone()
+            }
         ];
-        // Deduplicate while preserving order
-        let mut seen = std::collections::HashSet::new();
-        candidate_models.retain(|m| seen.insert(m.clone()));
 
         let mut last_error = String::new();
 
