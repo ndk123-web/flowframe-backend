@@ -517,6 +517,11 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
       - Ingress Routing / Gateways / Load Balancers: `x: 380, y: 220`
       - Application Servers: `x: 680`, with each server vertically stacked (e.g. `y: 40`, `y: 140`, `y: 240`, `y: 340`, `y: 440` with ~100px vertical gap)
       - Storage / Databases / Caches / Queues (Postgres, Redis, MessageQueue, PubSub): `x: 980` (or `x: 1080`), vertically aligned with connected servers
+- Rule 11 (Dynamic Endpoint Pipelines & Execution Semantics):
+    Servers can declare an explicit, ordered downstream execution pipeline for each accepted endpoint using `pipeline: ["node1", "node2"]`.
+    - Cache-Aside Stop-on-Hit: If an endpoint pipeline starts with a cache node (e.g. `r1` of type REDIS) and achieves CACHE_HIT, the server returns immediately with 200 OK without forwarding to subsequent hops. Only on CACHE_MISS does it advance to the next hop (e.g. `db1` Postgres).
+    - Strict Multi-Hop Sequences: For write operations, message queues, or microservice pipelines (e.g. `pipeline: ["db1", "mq1"]`), the server dispatches to each configured service hop sequentially.
+    - All pipeline targets MUST be declared in the architecture and connected from the server (e.g. `s1 -> r1`, `s1 -> db1`, `s1 -> mq1`).
 
 2. SYNTAX & TOKEN RULES:
 - The 'define' keyword is optional (e.g. `define CLIENT c1 { ... }` or `CLIENT c1 { ... }`).
@@ -564,7 +569,16 @@ FLOWFRAME ARCHITECTURE DSL v2.0.0 SPECIFICATION
     capacity: 50,
     prefetchLimit: 10,
     acceptedEndpoints: [
-      { endpoint: "/api/v1/orders", allowedMethod: ["POST"] }
+      {
+        endpoint: "/api/v1/orders",
+        allowedMethod: ["POST"],
+        pipeline: ["db1", "mq1"]
+      },
+      {
+        endpoint: "/api/v1/posts",
+        allowedMethod: ["GET"],
+        pipeline: ["r1", "db1"]
+      }
     ],
     registeredTopics: ["post.created"]
   }
